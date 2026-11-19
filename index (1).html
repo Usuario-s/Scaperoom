@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ScapeRoom Gifts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;500;700&family=Marcellus&display=swap">
+<style>
+/* Layout: one parchment map card (the house plan, which zooms into a room when a spot is opened) beside a detail panel; stacks on phones. */
+:root{
+  --bg:#e6d8b4;
+  --paper:#efe4c7;
+  --paper-2:#e2d1a6;
+  --ink:#2b2416;
+  --ink-soft:#66593c;
+  --wall:#372f20;
+  --frame:#85703f;
+  --clue:#7a2230;
+  --clue-soft:rgba(122,34,48,.13);
+  --hover:rgba(55,47,32,.07);
+  --sel:rgba(55,47,32,.13);
+  --focus:#1d5c78;
+  --font-display:'Marcellus','Optima','Palatino Linotype',Georgia,serif;
+  --font-body:'Alegreya Sans','Gill Sans','Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16120a; --paper:#201a0f; --paper-2:#2a2214; --ink:#efe3c4; --ink-soft:#ab9d7a;
+    --wall:#dccda5; --frame:#7a6a40; --clue:#e6ae4d; --clue-soft:rgba(230,174,77,.15);
+    --hover:rgba(239,227,196,.07); --sel:rgba(239,227,196,.13); --focus:#7fc4de;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16120a; --paper:#201a0f; --paper-2:#2a2214; --ink:#efe3c4; --ink-soft:#ab9d7a;
+  --wall:#dccda5; --frame:#7a6a40; --clue:#e6ae4d; --clue-soft:rgba(230,174,77,.15);
+  --hover:rgba(239,227,196,.07); --sel:rgba(239,227,196,.13); --focus:#7fc4de;
+  color-scheme:dark;
+}
+
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-body);
+  font-size:17px;
+  line-height:1.45;
+  padding-block:28px 40px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap{max-width:1080px;margin:0 auto}
+h1,h2,h3,p,ol,ul{margin:0}
+
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 40px;margin-bottom:22px}
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft)}
+h1{font-family:var(--font-display);font-weight:400;font-size:clamp(34px,6vw,54px);line-height:1.05;color:var(--ink);text-wrap:balance}
+.lede{max-width:36ch;color:var(--ink-soft);font-size:18px}
+
+.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:859px){.grid{grid-template-columns:minmax(0,1fr)}}
+
+.mapcard{
+  position:relative;
+  background:radial-gradient(120% 95% at 50% 42%, var(--paper) 55%, var(--paper-2) 100%);
+  border:2px solid var(--frame);
+  outline:1px solid var(--frame);
+  outline-offset:-7px;
+  border-radius:6px;
+  padding:22px 22px 18px;
+}
+@media (max-width:520px){.mapcard{padding:18px 14px 14px}}
+
+.mapbar{display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-height:34px}
+.where{font-family:var(--font-display);font-size:22px;color:var(--ink-soft)}
+.linkbtn{
+  font:inherit;font-size:15px;background:none;border:0;padding:6px 2px;cursor:pointer;
+  color:var(--ink);text-decoration:underline;text-underline-offset:3px;
+}
+.linkbtn:focus-visible,.chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+#plan{display:block;width:100%;height:auto;aspect-ratio:590/440;max-width:100%}
+
+/* plan drawing */
+.wall{fill:none;stroke:var(--wall);stroke-width:3.2;stroke-linecap:square;stroke-linejoin:miter}
+.room{fill:transparent;cursor:pointer;transition:fill .2s}
+.room.is-open{fill:var(--sel)}
+.room.closed{fill:url(#hatch);cursor:pointer}
+.room.closed.is-open{fill:url(#hatch)}
+@media (hover:hover){.room:not(.closed):hover{fill:var(--hover)}.room.is-open:hover{fill:var(--sel)}}
+.hl{stroke:var(--ink-soft);stroke-width:1.4;opacity:.5}
+.hall{fill:none;pointer-events:none}
+.door{fill:var(--wall);stroke:var(--paper);stroke-width:1.4;stroke-linejoin:round;pointer-events:none}
+
+.rlabel{font-family:var(--font-display);font-size:18px;fill:var(--ink);text-anchor:middle;pointer-events:none;transition:opacity .3s}
+.rlabel.sm{font-size:15px}
+.rlabel.soft{fill:var(--ink-soft)}
+.has-open .rlabel:not(.is-open){opacity:.4}
+
+.spot{cursor:pointer;transition:opacity .3s}
+.spot .hit{fill:transparent}
+.spot .dot{fill:var(--wall)}
+.spot .halo{fill:none;stroke:var(--clue);stroke-width:2.5;opacity:0;transition:opacity .25s}
+.spot .tick{fill:none;stroke:var(--paper);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity .25s}
+.spot.seen .tick{opacity:1}
+.spot.is-open .halo{opacity:1}
+.spot.shut .dot{fill:var(--ink-soft);opacity:.7}
+.has-open .spot:not(.is-open){opacity:.45}
+
+.clue{pointer-events:none}
+.clue .pop{opacity:0;transform:scale(.2);transform-box:fill-box;transform-origin:center;transition:opacity .25s .3s, transform .45s cubic-bezier(.2,1.4,.4,1) .3s}
+.clue .star{fill:var(--clue);stroke:var(--paper);stroke-width:1.4;stroke-linejoin:round}
+.clue .ring{fill:none;stroke:var(--clue);stroke-width:2;opacity:0;transform-box:fill-box;transform-origin:center}
+.clue .clabel{font-family:var(--font-body);font-weight:700;font-size:13px;letter-spacing:.12em;fill:var(--clue);text-anchor:middle;paint-order:stroke;stroke:var(--paper);stroke-width:4px;stroke-linejoin:round;opacity:0;transition:opacity .3s .5s}
+.clue.is-open .pop{opacity:1;transform:scale(1)}
+.clue.is-open .clabel{opacity:1}
+.clue.is-open .ring{animation:ping 2.4s ease-out .9s infinite}
+@keyframes ping{0%{opacity:.75;transform:scale(1)}100%{opacity:0;transform:scale(2.3)}}
+
+/* chips, legend */
+.chips{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0;margin:14px 0 0}
+.chip{
+  font:inherit;font-size:15px;display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:6px 12px;
+  background:transparent;color:var(--ink);border:1px solid var(--frame);border-radius:3px;cursor:pointer;
+}
+.chip .chk{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;display:none}
+.chip.seen .chk{display:block}
+.chip.is-open{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+@media (hover:hover){.chip:not(.is-open):hover{background:var(--hover)}}
+
+.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 20px;margin-top:16px;padding-top:12px;border-top:1px solid var(--frame)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;list-style:none;padding:0}
+.legend li{display:inline-flex;align-items:center;gap:7px;font-size:15px;color:var(--ink-soft)}
+.legend svg{width:20px;height:20px;flex:none}
+.legend .fillwall{fill:var(--wall)}
+.legend .fillclue{fill:var(--clue)}
+.legend .tk{fill:none;stroke:var(--paper);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.progress{display:inline-flex;align-items:center;gap:12px;font-size:15px;color:var(--ink-soft)}
+
+/* detail panel */
+.panel{background:var(--paper);border:1px solid var(--frame);border-radius:6px;padding:24px 24px 26px;display:flex;flex-direction:column;gap:14px}
+.panel h2{font-family:var(--font-display);font-weight:400;font-size:32px;line-height:1.1;text-wrap:balance}
+.panel h3{font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft)}
+.panel p{max-width:46ch}
+.steps{padding-left:1.3em;display:flex;flex-direction:column;gap:10px;max-width:46ch}
+.steps li::marker{font-family:var(--font-display);color:var(--clue);font-size:1.1em}
+.steps li{padding-left:4px}
+.pill{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:5px 13px 5px 10px;border:1px solid currentColor;border-radius:3px;font-weight:700;font-size:15px}
+.pill svg{width:16px;height:16px;flex:none}
+.pill.clue{color:var(--clue);background:var(--clue-soft)}
+.pill.none{color:var(--ink-soft)}
+.pill.shut{color:var(--ink-soft);border-style:dashed}
+.where-to{display:flex;flex-direction:column;gap:6px}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+
+
+<style>
+/* standalone page reset */
+:root{color-scheme:light}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">House map</p>
+      <h1>ScapeRoom Gifts</h1>
+    </div>
+    <p class="lede">Six notes are hidden around the house. Open a spot to see where its clue is.</p>
+  </header>
+
+  <main class="grid">
+    <section class="mapcard" aria-label="House plan">
+      <div class="mapbar">
+        <span class="where" id="where">The whole house</span>
+        <button type="button" class="linkbtn" id="back" hidden>Back to the whole house</button>
+      </div>
+
+      <svg id="plan" viewBox="395 140 590 440" role="img" aria-label="Floor plan of the house. Use the room buttons under the map to open a spot.">
+        <defs>
+          <pattern id="hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line class="hl" x1="0" y1="0" x2="0" y2="9"/>
+          </pattern>
+        </defs>
+
+        <g>
+          <path class="room" data-room="parents-chamber" d="M403 150H793V233H757L718 243H403Z"/>
+          <path class="room" data-room="bathroom" d="M793 150H970V233H793Z"/>
+          <path class="room" data-room="gabys-room" d="M403 243H627V345H403Z"/>
+          <path class="room closed" data-room="grandma-room" d="M820 233H970V305H820Z"/>
+          <path class="room" data-room="wash-room" d="M707 277H820V345H707Z"/>
+          <path class="room" data-room="kitchen" d="M820 305H970V497H855V345H820Z"/>
+          <path class="room" data-room="living-room" d="M403 345H855V497H970V567H403Z"/>
+          <path class="hall" d="M627 243H718L757 233H820V277H707V345H627Z"/>
+        </g>
+
+        <g>
+          <path class="wall" d="M403 150H970V508M970 558V567H403V150"/>
+          <path class="wall" d="M403 243H718M757 233H970"/>
+          <path class="wall" d="M793 150V233"/>
+          <path class="wall" d="M627 243V345H403"/>
+          <path class="wall" d="M707 277H820V345H707Z"/>
+          <path class="wall" d="M820 233V305H970"/>
+          <path class="wall" d="M820 345H855V497H898M930 497H970"/>
+        </g>
+
+        <g>
+          <path class="door" d="M-10 -9H10L0 9Z" transform="translate(793 180)"/>
+          <path class="door" d="M-10 -9H10L0 9Z" transform="translate(627 262)"/>
+          <path class="door" d="M-10 -9H10L0 9Z" transform="translate(744 243)"/>
+          <path class="door" d="M-10 -9H10L0 9Z" transform="translate(832 252)"/>
+          <path class="door" d="M-10 -9H10L0 9Z" transform="translate(757 281)"/>
+          <path class="door" d="M-10 -9H10L0 9Z" transform="translate(970 533)"/>
+        </g>
+
+        <g>
+          <text class="rlabel" data-room="parents-chamber" x="606" y="176">Parent's chamber</text>
+          <text class="rlabel" data-room="bathroom" x="885" y="177">Bathroom</text>
+          <text class="rlabel" data-room="gabys-room" x="514" y="281">Gaby's room</text>
+          <text class="rlabel sm soft" data-room="grandma-room" x="910" y="254">Grandma room</text>
+          <text class="rlabel sm" data-room="wash-room" x="765" y="303">Wash room</text>
+          <text class="rlabel" data-room="kitchen" x="913" y="386">Kitchen</text>
+          <text class="rlabel" data-room="living-room" x="641" y="427">Living room</text>
+          <text class="rlabel sm soft" x="667" y="322">Hallway</text>
+        </g>
+
+        <g>
+          <g class="spot" data-room="parents-chamber" transform="translate(598 210)"><circle class="hit" r="30"/><circle class="halo" r="25"/><circle class="dot" r="16"/><path class="tick" d="M-6 .5L-2 5L6.5 -5"/></g>
+          <g class="spot" data-room="bathroom" transform="translate(885 210)"><circle class="hit" r="30"/><circle class="halo" r="25"/><circle class="dot" r="16"/><path class="tick" d="M-6 .5L-2 5L6.5 -5"/></g>
+          <g class="spot" data-room="gabys-room" transform="translate(515 316)"><circle class="hit" r="30"/><circle class="halo" r="25"/><circle class="dot" r="16"/><path class="tick" d="M-6 .5L-2 5L6.5 -5"/></g>
+          <g class="spot" data-room="wash-room" transform="translate(761 325)"><circle class="hit" r="26"/><circle class="halo" r="25"/><circle class="dot" r="16"/><path class="tick" d="M-6 .5L-2 5L6.5 -5"/></g>
+          <g class="spot" data-room="kitchen" transform="translate(913 417)"><circle class="hit" r="30"/><circle class="halo" r="25"/><circle class="dot" r="16"/><path class="tick" d="M-6 .5L-2 5L6.5 -5"/></g>
+          <g class="spot" data-room="living-room" transform="translate(641 463)"><circle class="hit" r="30"/><circle class="halo" r="25"/><circle class="dot" r="16"/><path class="tick" d="M-6 .5L-2 5L6.5 -5"/></g>
+          <g class="spot shut" data-room="grandma-room" transform="translate(902 279)"><circle class="hit" r="22"/><circle class="halo" r="19"/><circle class="dot" r="12"/></g>
+        </g>
+
+        <g>
+          <g class="clue" data-room="parents-chamber" transform="translate(462 172)">
+            <circle class="ring" r="15"/>
+            <g class="pop"><path class="star" transform="scale(1.1)" d="M0 -14L3.29 -4.53L13.32 -4.33L5.33 1.73L8.23 11.33L0 5.6L-8.23 11.33L-5.33 1.73L-13.32 -4.33L-3.29 -4.53Z"/></g>
+            <text class="clabel" x="0" y="32">CLUE</text>
+          </g>
+          <g class="clue" data-room="gabys-room" transform="translate(421 266)">
+            <circle class="ring" r="15"/>
+            <g class="pop"><path class="star" transform="scale(1.1)" d="M0 -14L3.29 -4.53L13.32 -4.33L5.33 1.73L8.23 11.33L0 5.6L-8.23 11.33L-5.33 1.73L-13.32 -4.33L-3.29 -4.53Z"/></g>
+            <text class="clabel" x="10" y="32">CLUE</text>
+          </g>
+          <g class="clue" data-room="kitchen" transform="translate(945 327)">
+            <circle class="ring" r="15"/>
+            <g class="pop"><path class="star" transform="scale(1.1)" d="M0 -14L3.29 -4.53L13.32 -4.33L5.33 1.73L8.23 11.33L0 5.6L-8.23 11.33L-5.33 1.73L-13.32 -4.33L-3.29 -4.53Z"/></g>
+            <text class="clabel" x="-4" y="32">CLUE</text>
+          </g>
+          <g class="clue" data-room="bathroom" transform="translate(841 209)">
+            <circle class="ring" r="15"/>
+            <g class="pop"><path class="star" transform="scale(1.1)" d="M0 -14L3.29 -4.53L13.32 -4.33L5.33 1.73L8.23 11.33L0 5.6L-8.23 11.33L-5.33 1.73L-13.32 -4.33L-3.29 -4.53Z"/></g>
+            <text class="clabel" x="0" y="-21">CLUE</text>
+          </g>
+          <g class="clue" data-room="wash-room" transform="translate(800 318)">
+            <circle class="ring" r="15"/>
+            <g class="pop"><path class="star" transform="scale(1.1)" d="M0 -14L3.29 -4.53L13.32 -4.33L5.33 1.73L8.23 11.33L0 5.6L-8.23 11.33L-5.33 1.73L-13.32 -4.33L-3.29 -4.53Z"/></g>
+            <text class="clabel" x="0" y="25">CLUE</text>
+          </g>
+          <g class="clue" data-room="living-room" transform="translate(513 544)">
+            <circle class="ring" r="15"/>
+            <g class="pop"><path class="star" transform="scale(1.1)" d="M0 -14L3.29 -4.53L13.32 -4.33L5.33 1.73L8.23 11.33L0 5.6L-8.23 11.33L-5.33 1.73L-13.32 -4.33L-3.29 -4.53Z"/></g>
+            <text class="clabel" x="0" y="-22">CLUE</text>
+          </g>
+        </g>
+      </svg>
+
+      <ul class="chips" id="chips" aria-label="Spots"></ul>
+
+      <div class="foot">
+        <ul class="legend" aria-label="Legend">
+          <li><svg viewBox="-12 -12 24 24" aria-hidden="true"><path class="fillwall" d="M-9 -8H9L0 8Z"/></svg>Door</li>
+          <li><svg viewBox="-12 -12 24 24" aria-hidden="true"><circle class="fillwall" r="8"/></svg>Spot</li>
+          <li><svg viewBox="-12 -12 24 24" aria-hidden="true"><circle class="fillwall" r="9"/><path class="tk" d="M-4 .5L-1 3.5L4.5 -3"/></svg>Opened</li>
+          <li><svg viewBox="-15 -15 30 30" aria-hidden="true"><path class="fillclue" d="M0 -14L3.29 -4.53L13.32 -4.33L5.33 1.73L8.23 11.33L0 5.6L-8.23 11.33L-5.33 1.73L-13.32 -4.33L-3.29 -4.53Z"/></svg>Clue</li>
+        </ul>
+        <div class="progress">
+          <span id="count">0 of 6 spots opened</span>
+          <button type="button" class="linkbtn" id="reset" hidden>Reset</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel" id="panel" aria-live="polite"></aside>
+  </main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var KEY='scaperoom-gifts-opened';
+
+  // Edit the text below to change what players read. kind: 'clue' | 'none' | 'closed'
+  var ROOMS={
+    'parents-chamber':{name:"Parent's chamber",kind:'clue',box:[403,150,793,243],hint:'Along the outside wall, near the corner that is farthest from the bathroom.'},
+    'bathroom':{name:'Bathroom',kind:'clue',box:[793,150,970,233],hint:'Between the door and the spot, on the door side of the room.'},
+    'gabys-room':{name:"Gaby's room",kind:'clue',box:[403,243,627,345],hint:"In the corner where the wall shared with the parent's chamber meets the outside wall."},
+    'wash-room':{name:'Wash room',kind:'clue',box:[707,277,820,345],hint:'Right next to the spot, on the side toward the kitchen.'},
+    'kitchen':{name:'Kitchen',kind:'clue',box:[820,305,970,497],hint:"In the corner next to Grandma's room, against the outside wall."},
+    'living-room':{name:'Living room',kind:'clue',box:[403,345,970,567],hint:'Down by the bottom wall, toward the left side of the room.'},
+    'grandma-room':{name:"Grandma's room",kind:'closed',box:[820,233,970,305]}
+  };
+  var ORDER=['parents-chamber','bathroom','gabys-room','wash-room','kitchen','living-room'];
+  var STAR='<svg viewBox="-15 -15 30 30" aria-hidden="true"><path fill="currentColor" d="M0 -14L3.29 -4.53L13.32 -4.33L5.33 1.73L8.23 11.33L0 5.6L-8.23 11.33L-5.33 1.73L-13.32 -4.33L-3.29 -4.53Z"/></svg>';
+
+  var svg=document.getElementById('plan');
+  var panel=document.getElementById('panel');
+  var back=document.getElementById('back');
+  var reset=document.getElementById('reset');
+  var where=document.getElementById('where');
+  var count=document.getElementById('count');
+  var chips=document.getElementById('chips');
+
+  var FULL={x:395,y:140,w:590,h:440};
+  var RATIO=FULL.w/FULL.h;
+  var cur={x:FULL.x,y:FULL.y,w:FULL.w,h:FULL.h};
+  var raf=0, current=null, seen={};
+
+  try{
+    (JSON.parse(localStorage.getItem(KEY)||'[]')||[]).forEach(function(k){
+      if(ROOMS[k]&&ROOMS[k].kind!=='closed'){seen[k]=true;}
+    });
+  }catch(e){}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(Object.keys(seen)));}catch(e){}}
+
+  function reduced(){return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);}
+  function apply(){svg.setAttribute('viewBox',cur.x+' '+cur.y+' '+cur.w+' '+cur.h);}
+  function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+
+  function boxFor(b){
+    var pad=34, w=b[2]-b[0]+pad*2, h=b[3]-b[1]+pad*2;
+    if(w>=FULL.w*0.95){return {x:FULL.x,y:FULL.y,w:FULL.w,h:FULL.h};}
+    w=Math.max(w,300);
+    if(w/h>RATIO){h=w/RATIO;}else{w=h*RATIO;}
+    var cx=(b[0]+b[2])/2, cy=(b[1]+b[3])/2;
+    var x=clamp(cx-w/2,FULL.x,FULL.x+FULL.w-w);
+    var y=clamp(cy-h/2,FULL.y,FULL.y+FULL.h-h);
+    return {x:x,y:y,w:w,h:h};
+  }
+
+  function flyTo(t){
+    cancelAnimationFrame(raf);
+    if(reduced()){cur={x:t.x,y:t.y,w:t.w,h:t.h};apply();return;}
+    var from={x:cur.x,y:cur.y,w:cur.w,h:cur.h}, t0=performance.now(), D=520;
+    function step(now){
+      var p=Math.min(1,(now-t0)/D); p=1-Math.pow(1-p,3);
+      cur={x:from.x+(t.x-from.x)*p,y:from.y+(t.y-from.y)*p,w:from.w+(t.w-from.w)*p,h:from.h+(t.h-from.h)*p};
+      apply();
+      if(p<1){raf=requestAnimationFrame(step);}
+    }
+    raf=requestAnimationFrame(step);
+  }
+
+  function seenCount(){return ORDER.filter(function(k){return seen[k];}).length;}
+
+  function sync(){
+    var els=document.querySelectorAll('[data-room]');
+    for(var i=0;i<els.length;i++){
+      var el=els[i], id=el.getAttribute('data-room');
+      el.classList.toggle('is-open',id===current);
+      el.classList.toggle('seen',!!seen[id]);
+      if(el.classList.contains('chip')){el.setAttribute('aria-pressed',id===current?'true':'false');}
+    }
+    svg.classList.toggle('has-open',!!current);
+    var n=seenCount();
+    count.textContent=n+' of '+ORDER.length+' spots opened';
+    reset.hidden=n===0;
+  }
+
+  function renderPanel(id){
+    var r=id&&ROOMS[id], h;
+    if(!r){
+      h='<p class="eyebrow">How it works</p>'+
+        '<h2>Open a spot on the map</h2>'+
+        '<ol class="steps">'+
+        '<li>Tap a spot to open that room and see where its clue is marked.</li>'+
+        '<li>Find the clue. Each note carries a number and a short phrase.</li>'+
+        '<li>Collect all six notes and write them down in number order. Read them closely to learn where to go next.</li>'+
+        '</ol>';
+    }else if(r.kind==='clue'){
+      h='<p class="eyebrow">Spot opened</p><h2>'+r.name+'</h2>'+
+        '<p class="pill clue">'+STAR+'1 clue marked here</p>'+
+        '<div class="where-to"><h3>Where to look</h3><p>'+r.hint+'</p></div>';
+    }else if(r.kind==='closed'){
+      h='<p class="eyebrow">Spot opened</p><h2>'+r.name+'</h2>'+
+        '<p class="pill shut">Closed for the game</p>'+
+        '<p>This room is not part of the game. Try another spot.</p>';
+    }else{
+      h='<p class="eyebrow">Spot opened</p><h2>'+r.name+'</h2>'+
+        '<p class="pill none">No clue marked here</p>'+
+        '<p>No clue is marked in this room. Try another spot.</p>';
+    }
+    panel.innerHTML=h;
+  }
+
+  function select(id,o){
+    o=o||{};
+    var r=ROOMS[id]; if(!r){return;}
+    current=id;
+    if(r.kind!=='closed'){seen[id]=true;save();}
+    sync(); renderPanel(id);
+    where.textContent=r.name; back.hidden=false;
+    flyTo(boxFor(r.box));
+    if(!o.fromHash){try{location.hash=id;}catch(e){}}
+    if(!o.quiet){
+      try{panel.scrollIntoView({block:'nearest',behavior:reduced()?'auto':'smooth'});}catch(e){}
+    }
+  }
+
+  function clear(o){
+    current=null; sync(); renderPanel(null);
+    where.textContent='The whole house'; back.hidden=true;
+    flyTo(FULL);
+    if(!(o&&o.fromHash)){
+      try{history.replaceState(null,'',location.pathname+location.search);}
+      catch(e){try{location.hash='';}catch(_){}}
+    }
+  }
+
+  chips.innerHTML=ORDER.map(function(id){
+    return '<li><button type="button" class="chip" data-room="'+id+'" aria-pressed="false"><span>'+ROOMS[id].name+
+      '</span><svg class="chk" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5L6.5 12L13 4.5"/></svg></button></li>';
+  }).join('');
+
+  document.addEventListener('click',function(e){
+    var t=e.target&&e.target.closest?e.target.closest('[data-room]'):null;
+    if(t){select(t.getAttribute('data-room'));}
+  });
+  back.addEventListener('click',function(){clear();});
+  reset.addEventListener('click',function(){seen={};save();sync();});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&current){clear();}});
+  window.addEventListener('hashchange',function(){
+    var h=location.hash.replace('#','');
+    if(!h){if(current){clear({fromHash:true});}}
+    else if(ROOMS[h]&&h!==current){select(h,{fromHash:true,quiet:true});}
+  });
+
+  sync(); renderPanel(null);
+  var h0=location.hash.replace('#','');
+  if(ROOMS[h0]){select(h0,{fromHash:true,quiet:true});}
+})();
+</script>
+
+</body>
+</html>
